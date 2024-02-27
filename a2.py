@@ -1,53 +1,111 @@
-from conllu import parse_incr, TokenList
+import nltk
 import spacy
+import re
 from spacy.tokens import Doc
+from conllu import parse, parse_incr, TokenList
 
 nlp = spacy.load("en_core_web_sm")
+nltk.download('wordnet')
 
 
 test_path = 'en_ewt-up-test.conllu'
 train_path = 'en_ewt-up-train.conllu'
 
 
-def extract_features(sentence: TokenList):
-    # Use the tokens from the CoNLL file to ensure that we'll be working with the same set of tokens as
-    # identified in the CoNLL file.
-    conll_tokens = [token['form'] for token in sentence]
-    doc = Doc(nlp.vocab, words=conll_tokens)
+def secondary_tokens(token):
+    return True if '.' in token else False
 
-    # Process the doc with spaCy to add the linguistic features.
-    doc = nlp.get_pipe("ner")(doc)
-    # Initialize a list to store features for each token
-    features = []
-    for conll_token, spacy_token in zip(sentence, doc):
-        # Create a dictionary for the  features
-        token_features = {
-            'text': conll_token['form'],  # Text from CoNLL
-            'lemma': spacy_token.lemma_,
-            'pos_tag': spacy_token.pos_,
-            'dep_relation': spacy_token.dep_,
-            'head_token': spacy_token.head.text,
-            'morphology': spacy_token.morph,
-            'is_alpha': spacy_token.is_alpha,
-            'is_stop': spacy_token.is_stop,
-            'is_punct': spacy_token.is_punct,
-            'is_entity': spacy_token.ent_type_ != "",
-            'entity_type': spacy_token.ent_type_
-        }
+def comments(token):
+    return True if token.startswith("#") else False
 
-        # Append the token's features to the list
-        features.append(token_features)
+def extract_predicates_and_arguments(tokens):
+    if len(tokens) >= 11:
+        return tokens[10], tokens[11:]
+    else:
+        return '_', []
+    
+def remove_numbers_and_special_characters(input_string):
+    pattern = r'[^a-zA-Z\s]'
+    return re.sub(pattern, '', input_string)
 
-    return features
+def extract_features_from_conll_line(line, is_predicate):
+
+    fields = line.strip().split()
+    token = {
+        'form': fields[1],       # Surface form of the word
+        'lemma': fields[2],      # Lemma of the word
+        'pos_tag': fields[3],    # Part-of-speech tag
+        'dep_relation': fields[6],  # Dependency relation
+        'head_token': fields[8],    # Head token
+        'morphology': fields[5],    # Morphological features
+        'is_alpha': fields[1].isalpha(),  # Check if the token is alphabetic
+        'is_stop': False,  # Since we're not using spaCy, we cannot determine if it's a stop word
+        'is_punct': fields[1].isalnum(),  # Check if the token is a punctuation mark
+        'is_predicate': is_predicate
+    }
+
+    return token
+
 
 
 def main():
-    sentences: list[TokenList] = []
-    with open(train_path, 'r', encoding='utf-8') as file:
-        for sentence in parse_incr(file):
-            features = extract_features(sentence)
-            sentences.append(sentence)
+     
+    features = []
+    labels = []
+    
+    with open(filepath, 'r', encoding='utf-8') as file:
+        sentences = file.read().strip().split('\n\n')
+        limited_sentences = sentences[:1000]
+    
+        
+        for sentence in sentences:
+            
+            sentence_features = []
+            sentence_labels = []
+            
+            for line in sentence.split('\n'):
+
+                if line.startswith("# sent_id"):
+                    sent_id = line.split("=")[1].strip()
+                    
+                if comments(line):
+                    continue
+                
+                parts = line.split("\t")
+                token_id = parts[0]
+                
+                if secondary_tokens(token_id):
+                    continue
+                    
+                predicate_sense, arguments = extract_predicates_and_arguments(parts)
+                
+                if predicate_sense != '_':
+                    is_predicate = True
+                    
+                else: 
+                    is_predicate = False
+
+                
+                if arguments[0] != '_': 
+                    sentence_labels.append(arguments[0])
+                    
+                else: 
+                    sentence_labels.append('O')
+                                    
+                token_features = extract_features_from_conll_line(line, is_predicate)
+                sentence_features.append(token_features)
+                
+            features.append(sentence_features)
+            labels.append(sentence_labels)
+            
 
 
 if __name__ == '__main__':
     main()
+    
+    
+    
+    
+    
+    
+    
