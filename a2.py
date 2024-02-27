@@ -53,7 +53,7 @@ def main():
     features = []
     labels = []
     
-    with open(filepath, 'r', encoding='utf-8') as file:
+    with open(train_path, 'r', encoding='utf-8') as file:
         sentences = file.read().strip().split('\n\n')
         limited_sentences = sentences[:1000]
     
